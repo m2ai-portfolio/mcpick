@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Optional
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from rich.console import Console
 
 from .config import ServerConfig, GenerationOptions
@@ -15,6 +15,39 @@ console = Console()
 def get_template_dir() -> Path:
     """Get the directory containing Jinja2 templates."""
     return Path(__file__).parent / "templates"
+
+
+def get_custom_template_dir() -> Optional[Path]:
+    """Get custom template directory from environment variable if set."""
+    env_dir = os.environ.get("MCPICK_TEMPLATE_DIR")
+    if env_dir:
+        path = Path(env_dir)
+        if path.exists() and path.is_dir():
+            return path
+        else:
+            console.print(f"[yellow]Warning:[/yellow] MCPICK_TEMPLATE_DIR set but directory not found: {env_dir}")
+    return None
+
+
+def list_available_templates() -> dict[str, list[Path]]:
+    """
+    List all available templates (built-in and custom).
+
+    Returns:
+        Dictionary with 'builtin' and 'custom' keys, each containing list of template paths
+    """
+    builtin_dir = get_template_dir()
+    builtin_templates = sorted(builtin_dir.glob("*.j2"))
+
+    custom_templates = []
+    custom_dir = get_custom_template_dir()
+    if custom_dir:
+        custom_templates = sorted(custom_dir.glob("*.j2"))
+
+    return {
+        "builtin": builtin_templates,
+        "custom": custom_templates
+    }
 
 
 def sanitize_package_name(name: str) -> str:
@@ -113,10 +146,24 @@ def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Set up Jinja2 environment
-    template_dir = options.template_dir or get_template_dir()
+    # Set up Jinja2 environment with custom template support
+    template_dir = options.template_dir or get_custom_template_dir()
+    builtin_dir = get_template_dir()
+
+    # Use ChoiceLoader to check custom templates first, then fall back to built-in
+    if template_dir and template_dir != builtin_dir:
+        loader = ChoiceLoader([
+            FileSystemLoader(template_dir),
+            FileSystemLoader(builtin_dir)
+        ])
+        console.print(f"[cyan]Using custom templates from:[/cyan] {template_dir}")
+        console.print(f"[dim]Falling back to built-in templates: {builtin_dir}[/dim]")
+    else:
+        loader = FileSystemLoader(builtin_dir)
+        console.print(f"[dim]Using built-in templates: {builtin_dir}[/dim]")
+
     env = Environment(
-        loader=FileSystemLoader(template_dir),
+        loader=loader,
         autoescape=False,  # We're generating Python/TOML/Markdown, not HTML
         trim_blocks=True,
         lstrip_blocks=False,  # Keep leading whitespace for proper Python indentation

@@ -1,6 +1,7 @@
 """Command-line interface for MCPick."""
 
 import sys
+import os
 from pathlib import Path
 import click
 from rich.console import Console
@@ -9,8 +10,8 @@ from rich.table import Table
 from pydantic import ValidationError
 
 from .config import parse_yaml, validate_yaml, GenerationOptions
-from .validators import validate_server_config
-from .generator import generate_project
+from .validators import validate_server_config, validate_custom_templates
+from .generator import generate_project, list_available_templates, get_custom_template_dir
 from .wizard import run_wizard, prompt_generate_project
 
 console = Console()
@@ -53,7 +54,13 @@ def main():
     is_flag=True,
     help="Skip dependency installation",
 )
-def generate(config_file, interactive, output_dir, overwrite, no_venv, no_install):
+@click.option(
+    "--template-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Custom template directory (overrides MCPICK_TEMPLATE_DIR)",
+)
+def generate(config_file, interactive, output_dir, overwrite, no_venv, no_install, template_dir):
     """Generate an MCP server project from a YAML configuration file or interactive wizard."""
     try:
         # Check if we should use interactive mode
@@ -93,10 +100,25 @@ def generate(config_file, interactive, output_dir, overwrite, no_venv, no_instal
         else:
             output_dir = Path(output_dir)
 
+        # Validate custom template directory if provided
+        if template_dir:
+            validation_errors_dict = validate_custom_templates(template_dir)
+            if validation_errors_dict:
+                console.print("[bold yellow]Custom template validation warnings:[/bold yellow]")
+                for template_name, errors in validation_errors_dict.items():
+                    if template_name == "_error":
+                        for error in errors:
+                            console.print(f"  [red]✗[/red] {error}")
+                        sys.exit(1)
+                    else:
+                        console.print(f"  [yellow]⚠[/yellow] {template_name}:")
+                        for error in errors:
+                            console.print(f"      Missing required variable: {error}")
+
         # Create generation options
         options = GenerationOptions(
             output_dir=output_dir,
-            template_dir=None,
+            template_dir=template_dir,
             overwrite=overwrite,
             create_venv=not no_venv,
             install_deps=not no_install,
@@ -251,6 +273,85 @@ def validate(config_file):
         sys.exit(1)
     except Exception as e:
         console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        sys.exit(1)
+
+
+@main.command(name="list-templates")
+def list_templates():
+    """List available built-in and custom templates."""
+    try:
+        templates = list_available_templates()
+
+        # Check if custom template dir is set
+        custom_dir = get_custom_template_dir()
+        env_var_set = "MCPICK_TEMPLATE_DIR" in os.environ
+
+        # Display header
+        console.print(Panel(
+            "[bold cyan]MCPick Template Overview[/bold cyan]\n\n"
+            f"Built-in templates: {len(templates['builtin'])}\n"
+            f"Custom templates: {len(templates['custom'])}",
+            title="Available Templates",
+            border_style="cyan"
+        ))
+
+        # Display built-in templates
+        console.print("\n[bold]Built-in Templates:[/bold]")
+        if templates['builtin']:
+            table = Table(show_header=True, header_style="bold cyan")
+            table.add_column("Template", style="cyan")
+            table.add_column("Status", style="green")
+
+            for template_path in templates['builtin']:
+                template_name = template_path.name
+                # Check if this template is overridden by custom template
+                is_overridden = any(t.name == template_name for t in templates['custom'])
+                status = "[yellow]Overridden by custom[/yellow]" if is_overridden else "[green]Active[/green]"
+                table.add_row(template_name, status)
+
+            console.print(table)
+        else:
+            console.print("[dim]  No built-in templates found[/dim]")
+
+        # Display custom templates
+        if env_var_set or templates['custom']:
+            console.print("\n[bold]Custom Templates:[/bold]")
+            if custom_dir:
+                console.print(f"[dim]Location: {custom_dir}[/dim]\n")
+
+            if templates['custom']:
+                # Validate custom templates
+                validation_results = validate_custom_templates(custom_dir)
+
+                table = Table(show_header=True, header_style="bold cyan")
+                table.add_column("Template", style="cyan")
+                table.add_column("Validation", style="white")
+
+                for template_path in templates['custom']:
+                    template_name = template_path.name
+                    if template_name in validation_results:
+                        missing = validation_results[template_name]
+                        status = f"[yellow]⚠ Missing: {', '.join(missing)}[/yellow]"
+                    else:
+                        status = "[green]✓ Valid[/green]"
+                    table.add_row(template_name, status)
+
+                console.print(table)
+
+                # Show validation warnings
+                if validation_results:
+                    console.print("\n[bold yellow]Validation Warnings:[/bold yellow]")
+                    console.print("[dim]Custom templates are missing required template variables.[/dim]")
+                    console.print("[dim]They may not generate valid projects.[/dim]")
+            else:
+                console.print(f"[dim]  MCPICK_TEMPLATE_DIR set but no .j2 templates found in: {custom_dir}[/dim]")
+        else:
+            console.print("\n[bold]Custom Templates:[/bold]")
+            console.print("[dim]  No custom template directory set[/dim]")
+            console.print("[dim]  Set MCPICK_TEMPLATE_DIR environment variable or use --template-dir flag[/dim]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error listing templates:[/bold red] {e}")
         sys.exit(1)
 
 

@@ -1,6 +1,8 @@
 """Additional validation logic for MCP server configurations."""
 
 from typing import List, Dict, Any
+from pathlib import Path
+import re
 from .config import ServerConfig, ToolDefinition, ToolParameter
 
 
@@ -133,3 +135,82 @@ def validate_server_config(config: ServerConfig) -> List[str]:
         )
 
     return errors
+
+
+# Template variable requirements for each template type
+TEMPLATE_REQUIRED_VARS = {
+    "server.py.j2": ["config", "tools", "package_name"],
+    "pyproject.toml.j2": ["config", "package_name"],
+    "test_tools.py.j2": ["config", "tools", "package_name"],
+    "README.md.j2": ["config", "tools", "package_name"],
+    "init.sh.j2": ["config", "package_name"],
+    "conftest.py.j2": ["config", "package_name"],
+}
+
+
+def validate_template(template_path: Path, required_vars: List[str]) -> List[str]:
+    """
+    Validate that a custom template references required template variables.
+
+    Args:
+        template_path: Path to the template file
+        required_vars: List of required variable names
+
+    Returns:
+        List of missing variable names (empty if all required variables are present)
+    """
+    if not template_path.exists():
+        return [f"Template file not found: {template_path}"]
+
+    try:
+        content = template_path.read_text()
+    except Exception as e:
+        return [f"Failed to read template: {e}"]
+
+    missing_vars = []
+
+    # Check for each required variable
+    for var in required_vars:
+        # Look for variable references in various Jinja2 forms:
+        # {{ var }}, {{ var. }}, {% for item in var %}, etc.
+        patterns = [
+            r"\{\{\s*" + var + r"[\s\.\}]",  # {{ var or {{ var.
+            r"\{\{\s*" + var + r"\|",  # {{ var|filter
+            r"\{%\s*for\s+\w+\s+in\s+" + var + r"\s*%\}",  # {% for x in var %}
+            r"\{%\s*if\s+" + var + r"[\s\.]",  # {% if var or {% if var.
+        ]
+
+        found = any(re.search(pattern, content) for pattern in patterns)
+
+        if not found:
+            missing_vars.append(var)
+
+    return missing_vars
+
+
+def validate_custom_templates(custom_dir: Path) -> Dict[str, List[str]]:
+    """
+    Validate all custom templates in a directory.
+
+    Args:
+        custom_dir: Path to custom templates directory
+
+    Returns:
+        Dictionary mapping template names to lists of validation errors
+    """
+    if not custom_dir.exists():
+        return {"_error": [f"Custom template directory not found: {custom_dir}"]}
+
+    if not custom_dir.is_dir():
+        return {"_error": [f"Custom template path is not a directory: {custom_dir}"]}
+
+    validation_results = {}
+
+    for template_name, required_vars in TEMPLATE_REQUIRED_VARS.items():
+        template_path = custom_dir / template_name
+        if template_path.exists():
+            errors = validate_template(template_path, required_vars)
+            if errors:
+                validation_results[template_name] = errors
+
+    return validation_results

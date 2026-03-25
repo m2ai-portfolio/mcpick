@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""{{ server_name }} - MCP Server API Wrapper with HTTP Client."""
+
+import asyncio
+import json
+import logging
+from typing import Any
+import httpx
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# API Configuration
+# TODO: Set your API base URL and authentication
+API_BASE_URL = "https://api.example.com"
+API_KEY = "your-api-key-here"  # Consider using environment variable
+
+
+class APIClient:
+    """HTTP client for external API calls."""
+
+    def __init__(self, base_url: str, api_key: str | None = None):
+        self.base_url = base_url
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
+
+    async def get(self, endpoint: str, params: dict | None = None) -> dict:
+        """Make GET request to API."""
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}{endpoint}"
+            response = await client.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            return response.json()
+
+    async def post(self, endpoint: str, data: dict) -> dict:
+        """Make POST request to API."""
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}{endpoint}"
+            response = await client.post(url, headers=self.headers, json=data)
+            response.raise_for_status()
+            return response.json()
+
+    async def put(self, endpoint: str, data: dict) -> dict:
+        """Make PUT request to API."""
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}{endpoint}"
+            response = await client.put(url, headers=self.headers, json=data)
+            response.raise_for_status()
+            return response.json()
+
+    async def delete(self, endpoint: str) -> dict:
+        """Make DELETE request to API."""
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}{endpoint}"
+            response = await client.delete(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json() if response.content else {"status": "deleted"}
+
+
+# Initialize API client
+api_client = APIClient(API_BASE_URL, API_KEY)
+
+# Initialize MCP server
+app = Server("{{ package_name }}")
+
+
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    """List available MCP tools."""
+    return [
+{% for tool in tools %}
+        Tool(
+            name="{{ tool.name }}",
+            description="{{ tool.description }}",
+            inputSchema={
+                "type": "object",
+                "properties": {
+{% for param in tool.parameters %}
+                    "{{ param.name }}": {
+                        "type": "{{ param.type }}",
+                        "description": "{{ param.description }}"{% if param.enum_values %},
+                        "enum": {{ param.enum_values | tojson }}{% endif %}{% if param.default is not none %},
+                        "default": {{ param.default | tojson }}{% endif %}
+                    }{% if not loop.last %},{% endif %}
+{% endfor %}
+                },
+                "required": [{% for param in tool.parameters %}{% if param.required %}"{{ param.name }}"{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}]
+            }
+        ){% if not loop.last %},{% endif %}
+{% endfor %}
+    ]
+
+
+{% for tool in tools %}
+async def {{ tool.name }}({% for param in tool.parameters %}{{ param.name }}: {% if param.type == "string" %}str{% elif param.type == "integer" %}int{% elif param.type == "number" %}float{% elif param.type == "boolean" %}bool{% elif param.type == "array" %}list{% elif param.type == "object" %}dict{% else %}Any{% endif %}{% if not param.required %} | None = {% if param.default is not none %}{{ param.default | tojson }}{% else %}None{% endif %}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}) -> dict[str, Any]:
+    """
+    {{ tool.description }}
+{% if tool.parameters %}
+
+    Args:
+{% for param in tool.parameters %}
+        {{ param.name }}: {{ param.description }}
+{% endfor %}
+{% endif %}
+
+    Returns:
+        {{ tool.return_description or "Result of the operation" }}
+    """
+    try:
+        logger.info("Executing {{ tool.name }} via API")
+
+        # TODO: Implement {{ tool.name }} API call
+        # Example: response = await api_client.get("/endpoint", params={...})
+        # Example: response = await api_client.post("/endpoint", data={...})
+
+        result = {
+            "status": "success",
+            "message": "This API wrapper tool handler needs to be implemented",
+            "tool": "{{ tool.name }}",
+{% if tool.parameters %}
+            "params": {
+{% for param in tool.parameters %}
+                "{{ param.name }}": {{ param.name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+            }
+{% else %}
+            "params": {}
+{% endif %}
+        }
+
+        return result
+
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP error in {{ tool.name }}: {% raw %}{e}{% endraw %}", exc_info=True)
+        raise ValueError(f"API request failed: {e}")
+    except Exception as e:
+        logger.error(f"Error in {{ tool.name }}: {% raw %}{e}{% endraw %}", exc_info=True)
+        raise
+
+
+{% endfor %}
+
+@app.call_tool()
+async def call_tool(name: str, arguments: Any) -> list[TextContent]:
+    """Handle tool execution requests."""
+    logger.info(f"Tool called: {name} with arguments: {arguments}")
+
+    try:
+{% for tool in tools %}
+        {% if loop.first %}if{% else %}elif{% endif %} name == "{{ tool.name }}":
+            result = await {{ tool.name }}(
+{% for param in tool.parameters %}
+                {{ param.name }}=arguments.get("{{ param.name }}"{% if not param.required %}, {% if param.default is not none %}{{ param.default | tojson }}{% else %}None{% endif %}{% endif %}){% if not loop.last %},{% endif %}
+
+{% endfor %}
+            )
+{% endfor %}
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+
+        # Return result as JSON string
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except Exception as e:
+        logger.error(f"Error executing tool {name}: {e}", exc_info=True)
+        error_response = {
+            "status": "error",
+            "error": str(e),
+            "tool": name
+        }
+        return [TextContent(type="text", text=json.dumps(error_response, indent=2))]
+
+
+async def main():
+    """Run the MCP server."""
+    logger.info("Starting {{ server_name }} MCP server with API wrapper")
+    logger.info(f"API Base URL: {API_BASE_URL}")
+    logger.info("Available tools: {% for tool in tools %}{{ tool.name }}{% if not loop.last %}, {% endif %}{% endfor %}")
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await app.run(
+                read_stream,
+                write_stream,
+                app.create_initialization_options()
+            )
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        raise
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
