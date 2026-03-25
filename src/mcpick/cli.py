@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from .config import parse_yaml, validate_yaml, GenerationOptions
 from .validators import validate_server_config
 from .generator import generate_project
+from .wizard import run_wizard, prompt_generate_project
 
 console = Console()
 
@@ -23,7 +24,13 @@ def main():
 
 
 @main.command()
-@click.argument("config_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("config_file", type=click.Path(exists=True, path_type=Path), required=False)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Launch interactive wizard to create configuration",
+)
 @click.option(
     "--output-dir",
     "-o",
@@ -46,12 +53,31 @@ def main():
     is_flag=True,
     help="Skip dependency installation",
 )
-def generate(config_file, output_dir, overwrite, no_venv, no_install):
-    """Generate an MCP server project from a YAML configuration file."""
+def generate(config_file, interactive, output_dir, overwrite, no_venv, no_install):
+    """Generate an MCP server project from a YAML configuration file or interactive wizard."""
     try:
-        # Parse and validate configuration
-        with console.status("[bold blue]Parsing configuration..."):
-            config = parse_yaml(config_file)
+        # Check if we should use interactive mode
+        if interactive or config_file is None:
+            # Run the interactive wizard
+            config, yaml_path = run_wizard()
+
+            # Ask if user wants to generate project now
+            should_generate, wizard_output_dir = prompt_generate_project(config, yaml_path)
+
+            if not should_generate:
+                console.print("\n[yellow]Project generation skipped.[/yellow]")
+                console.print(f"[dim]You can generate the project later using:[/dim]")
+                if yaml_path:
+                    console.print(f"[dim]  mcpick generate {yaml_path}[/dim]")
+                return
+
+            # Use wizard-provided output directory if not overridden by CLI option
+            if output_dir is None:
+                output_dir = wizard_output_dir
+        else:
+            # Parse and validate configuration from file
+            with console.status("[bold blue]Parsing configuration..."):
+                config = parse_yaml(config_file)
 
         # Run additional validation
         validation_errors = validate_server_config(config)
@@ -97,6 +123,63 @@ def generate(config_file, output_dir, overwrite, no_venv, no_install):
     except FileNotFoundError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         sys.exit(1)
+    except ValidationError as e:
+        console.print("[bold red]Configuration validation failed:[/bold red]")
+        for error in e.errors():
+            field = " -> ".join(str(loc) for loc in error["loc"])
+            console.print(f"  [red]✗[/red] {field}: {error['msg']}")
+        sys.exit(1)
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        sys.exit(1)
+
+
+@main.command()
+def wizard():
+    """Launch interactive wizard to create a server configuration."""
+    try:
+        config, yaml_path = run_wizard()
+
+        # Ask if user wants to generate project now
+        should_generate, output_dir = prompt_generate_project(config, yaml_path)
+
+        if not should_generate:
+            console.print("\n[yellow]Project generation skipped.[/yellow]")
+            console.print(f"[dim]You can generate the project later using:[/dim]")
+            if yaml_path:
+                console.print(f"[dim]  mcpick generate {yaml_path}[/dim]")
+            return
+
+        # Create generation options
+        options = GenerationOptions(
+            output_dir=output_dir,
+            template_dir=None,
+            overwrite=False,
+            create_venv=True,
+            install_deps=True,
+        )
+
+        # Generate project
+        console.print(f"\n[bold green]Generating MCP server project:[/bold green] {config.server_name}")
+        console.print(f"[dim]Output directory: {output_dir}[/dim]\n")
+
+        generate_project(config, options)
+
+        # Success message
+        console.print(Panel(
+            f"[bold green]✓ Project generated successfully![/bold green]\n\n"
+            f"Next steps:\n"
+            f"  1. cd {output_dir}\n"
+            f"  2. chmod +x init.sh && ./init.sh\n"
+            f"  3. Implement tool handlers in src/server.py\n"
+            f"  4. Run tests with: pytest tests/",
+            title="Success",
+            border_style="green"
+        ))
+
     except ValidationError as e:
         console.print("[bold red]Configuration validation failed:[/bold red]")
         for error in e.errors():
