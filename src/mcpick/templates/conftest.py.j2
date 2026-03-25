@@ -1,0 +1,33 @@
+"""Pytest configuration and fixtures for {{ server_name }}."""
+
+import pytest
+import sys
+from pathlib import Path
+
+# Add src directory to Python path for imports
+src_path = Path(__file__).parent.parent / "src"
+sys.path.insert(0, str(src_path))
+
+
+@pytest.fixture
+def sample_arguments():
+    """Provide sample arguments for testing tool handlers."""
+    return {
+{% for tool in tools %}
+        "{{ tool.name }}": {
+{% for param in tool.parameters %}
+            "{{ param.name }}": {% if param.type == "string" %}"test_value"{% elif param.type == "integer" %}42{% elif param.type == "number" %}3.14{% elif param.type == "boolean" %}True{% elif param.type == "array" %}["item1", "item2"]{% elif param.type == "object" %}{"key": "value"}{% else %}None{% endif %},
+{% endfor %}
+        },
+{% endfor %}
+    }
+
+
+@pytest.fixture
+def valid_tool_names():
+    """Provide list of valid tool names."""
+    return [
+{% for tool in tools %}
+        "{{ tool.name }}",
+{% endfor %}
+    ]

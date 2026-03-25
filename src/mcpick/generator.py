@@ -151,8 +151,9 @@ def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
         # Generate pyproject.toml
         _render_template(env, "pyproject.toml.j2", output_dir / "pyproject.toml", context)
 
-        # Generate test file
+        # Generate test files
         _render_template(env, "test_tools.py.j2", tests_dir / "test_tools.py", context)
+        _render_template(env, "conftest.py.j2", tests_dir / "conftest.py", context)
 
         # Generate README.md
         _render_template(env, "README.md.j2", output_dir / "README.md", context)

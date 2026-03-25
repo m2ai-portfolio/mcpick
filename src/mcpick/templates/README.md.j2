@@ -20,7 +20,9 @@ This MCP server was generated using MCPick. It provides the following tools:
 
 ## Installation
 
-1. Run the initialization script:
+### Quick Setup (Recommended)
+
+Run the initialization script to automatically set up everything:
 
 ```bash
 chmod +x init.sh
@@ -28,19 +30,41 @@ chmod +x init.sh
 ```
 
 This will:
-- Create a virtual environment
-- Install all dependencies
-- Set up the development environment
+- Check Python version ({{ python_version }} required)
+- Create a virtual environment in `venv/`
+- Upgrade pip
+- Install the project with all dependencies
+- Install development dependencies (pytest, pytest-asyncio, pytest-cov)
+
+### Manual Installation
+
+If you prefer manual setup:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # On Linux/macOS
+# or
+venv\Scripts\activate  # On Windows
+
+# Install in editable mode with dev dependencies
+pip install -e ".[dev]"
+```
 
 ## Usage
 
 ### Running the MCP Server
 
+Activate the virtual environment and run the server:
+
 ```bash
+source venv/bin/activate  # Skip if already activated
 python src/server.py
 ```
 
-The server runs with stdio transport and communicates via JSON-RPC messages.
+The server runs with stdio transport and communicates via JSON-RPC messages. It can be integrated with MCP-compatible clients like Claude Desktop.
 
 ### Testing
 
@@ -54,6 +78,14 @@ Run with coverage:
 
 ```bash
 pytest tests/ --cov=src --cov-report=html
+```
+
+View coverage report:
+
+```bash
+open htmlcov/index.html  # On macOS
+# or
+xdg-open htmlcov/index.html  # On Linux
 ```
 
 ## Development
