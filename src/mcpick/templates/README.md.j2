@@ -1,0 +1,106 @@
+# {{ server_name }}
+
+{{ description }}
+
+## Overview
+
+This MCP server was generated using MCPick. It provides the following tools:
+
+{% for tool in tools %}
+### {{ tool.name }}
+
+{{ tool.description }}
+
+**Parameters:**
+{% for param in tool.parameters %}
+- `{{ param.name }}` ({{ param.type }}{% if not param.required %}, optional{% endif %}): {{ param.description }}
+{% endfor %}
+
+{% endfor %}
+
+## Installation
+
+1. Run the initialization script:
+
+```bash
+chmod +x init.sh
+./init.sh
+```
+
+This will:
+- Create a virtual environment
+- Install all dependencies
+- Set up the development environment
+
+## Usage
+
+### Running the MCP Server
+
+```bash
+python src/server.py
+```
+
+The server runs with stdio transport and communicates via JSON-RPC messages.
+
+### Testing
+
+Run the test suite:
+
+```bash
+pytest tests/
+```
+
+Run with coverage:
+
+```bash
+pytest tests/ --cov=src --cov-report=html
+```
+
+## Development
+
+### Implementing Tool Handlers
+
+Each tool handler in `src/server.py` is currently a stub. Implement the actual logic for each tool:
+
+{% for tool in tools %}
+- `{{ tool.name }}()` - {{ tool.description }}
+{% endfor %}
+
+### Adding Dependencies
+
+Add new dependencies to `pyproject.toml` under the `dependencies` section, then run:
+
+```bash
+pip install -e .
+```
+
+## Project Structure
+
+```
+.
+├── src/
+│   └── server.py          # MCP server implementation
+├── tests/
+│   └── test_tools.py      # Tool tests
+├── pyproject.toml         # Project configuration
+├── README.md              # This file
+└── init.sh                # Setup script
+```
+
+## Configuration
+
+This server was generated from the following configuration:
+
+- **Version:** {{ version }}
+{% if author %}
+- **Author:** {{ author }}
+{% endif %}
+- **Python Version:** {{ python_version }}
+- **Tools:** {{ tools|length }}
+{% if dependencies %}
+- **Dependencies:** {{ dependencies|length }}
+{% endif %}
+
+## License
+
+MIT

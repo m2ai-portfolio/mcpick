@@ -1,0 +1,11 @@
+server_name: "Invalid Tool Server"
+description: "Server with invalid tool definition"
+version: "0.1.0"
+
+tools:
+  - name: "broken_tool"
+    # Missing description field (required)
+    parameters:
+      - name: "param1"
+        # Missing type field (required)
+        description: "A parameter without type"

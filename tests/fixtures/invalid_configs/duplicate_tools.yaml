@@ -1,0 +1,11 @@
+server_name: "Duplicate Tools Server"
+description: "Server with duplicate tool names"
+version: "0.1.0"
+
+tools:
+  - name: "my_tool"
+    description: "First tool"
+    parameters: []
+  - name: "my_tool"
+    description: "Duplicate tool name"
+    parameters: []

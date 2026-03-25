@@ -1,0 +1,65 @@
+server_name: "Calculator MCP Server"
+description: "A simple calculator MCP server with basic arithmetic operations"
+author: "MCPick Example"
+author_email: "example@mcpick.dev"
+version: "0.1.0"
+python_version: ">=3.11"
+
+tools:
+  - name: "add"
+    description: "Add two numbers together"
+    parameters:
+      - name: "a"
+        type: "number"
+        description: "First number"
+        required: true
+      - name: "b"
+        type: "number"
+        description: "Second number"
+        required: true
+    return_type: "object"
+    return_description: "Result containing the sum"
+
+  - name: "subtract"
+    description: "Subtract second number from first number"
+    parameters:
+      - name: "a"
+        type: "number"
+        description: "Number to subtract from"
+        required: true
+      - name: "b"
+        type: "number"
+        description: "Number to subtract"
+        required: true
+    return_type: "object"
+    return_description: "Result containing the difference"
+
+  - name: "multiply"
+    description: "Multiply two numbers"
+    parameters:
+      - name: "a"
+        type: "number"
+        description: "First number"
+        required: true
+      - name: "b"
+        type: "number"
+        description: "Second number"
+        required: true
+    return_type: "object"
+    return_description: "Result containing the product"
+
+  - name: "divide"
+    description: "Divide first number by second number"
+    parameters:
+      - name: "a"
+        type: "number"
+        description: "Dividend"
+        required: true
+      - name: "b"
+        type: "number"
+        description: "Divisor"
+        required: true
+    return_type: "object"
+    return_description: "Result containing the quotient"
+
+dependencies: {}

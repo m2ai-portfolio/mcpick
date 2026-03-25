@@ -1,0 +1,8 @@
+# Missing server_name field
+description: "Server without a name"
+version: "0.1.0"
+
+tools:
+  - name: "test_tool"
+    description: "A test tool"
+    parameters: []

@@ -1,0 +1,52 @@
+server_name: "Database Tools MCP Server"
+description: "MCP server for database query and management operations"
+author: "MCPick Example"
+version: "0.1.0"
+
+tools:
+  - name: "execute_query"
+    description: "Execute a SQL query and return results"
+    parameters:
+      - name: "query"
+        type: "string"
+        description: "SQL query to execute"
+        required: true
+      - name: "database"
+        type: "string"
+        description: "Database name"
+        required: true
+      - name: "read_only"
+        type: "boolean"
+        description: "Whether query should be read-only"
+        required: false
+        default: true
+    return_type: "object"
+    return_description: "Query results as array of objects"
+
+  - name: "list_tables"
+    description: "List all tables in the database"
+    parameters:
+      - name: "database"
+        type: "string"
+        description: "Database name"
+        required: true
+    return_type: "object"
+    return_description: "Array of table names"
+
+  - name: "get_table_schema"
+    description: "Get schema information for a specific table"
+    parameters:
+      - name: "database"
+        type: "string"
+        description: "Database name"
+        required: true
+      - name: "table"
+        type: "string"
+        description: "Table name"
+        required: true
+    return_type: "object"
+    return_description: "Table schema with column definitions"
+
+dependencies:
+  sqlalchemy: ">=2.0.0"
+  psycopg2-binary: ">=2.9.0"

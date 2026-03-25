@@ -1,0 +1,40 @@
+server_name: "Weather API MCP Server"
+description: "MCP server for fetching weather information from external APIs"
+author: "MCPick Example"
+version: "0.1.0"
+
+tools:
+  - name: "get_current_weather"
+    description: "Get current weather for a specific location"
+    parameters:
+      - name: "location"
+        type: "string"
+        description: "City name or coordinates"
+        required: true
+      - name: "units"
+        type: "string"
+        description: "Temperature units (metric or imperial)"
+        required: false
+        default: "metric"
+        enum_values: ["metric", "imperial"]
+    return_type: "object"
+    return_description: "Current weather data including temperature, humidity, and conditions"
+
+  - name: "get_forecast"
+    description: "Get weather forecast for upcoming days"
+    parameters:
+      - name: "location"
+        type: "string"
+        description: "City name or coordinates"
+        required: true
+      - name: "days"
+        type: "integer"
+        description: "Number of days to forecast (1-7)"
+        required: false
+        default: 3
+    return_type: "object"
+    return_description: "Weather forecast data"
+
+dependencies:
+  requests: ">=2.31.0"
+  python-dotenv: ">=1.0.0"

@@ -1,0 +1,17 @@
+server_name: "Test Calculator"
+description: "Test calculator for validation"
+version: "0.1.0"
+
+tools:
+  - name: "add"
+    description: "Add two numbers"
+    parameters:
+      - name: "x"
+        type: "integer"
+        description: "First number"
+        required: true
+      - name: "y"
+        type: "integer"
+        description: "Second number"
+        required: true
+    return_type: "object"

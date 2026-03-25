@@ -1,0 +1,27 @@
+"""Tests for {{ server_name }} MCP tools."""
+
+import pytest
+from src.server import (
+{% for tool in tools %}
+    {{ tool.name }},
+{% endfor %}
+)
+
+
+{% for tool in tools %}
+@pytest.mark.asyncio
+async def test_{{ tool.name }}():
+    """Test {{ tool.name }} tool."""
+    # TODO: Implement test with realistic data
+    result = await {{ tool.name }}(
+{% for param in tool.parameters %}
+        {{ param.name }}={% if param.type == "string" %}"test_value"{% elif param.type == "integer" %}42{% elif param.type == "number" %}3.14{% elif param.type == "boolean" %}True{% elif param.type == "array" %}[]{% elif param.type == "object" %}{}{% else %}None{% endif %}{% if not loop.last %},{% endif %}
+{% endfor %}
+    )
+
+    # Basic assertion - replace with actual validation
+    assert result is not None
+    assert isinstance(result, dict)
+
+
+{% endfor %}
