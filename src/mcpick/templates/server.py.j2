@@ -2,6 +2,7 @@
 """{{ server_name }} - MCP Server Implementation."""
 
 import asyncio
+import json
 import logging
 from typing import Any
 from mcp.server import Server
@@ -9,7 +10,10 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Initialize MCP server
@@ -31,8 +35,8 @@ async def list_tools() -> list[Tool]:
                     "{{ param.name }}": {
                         "type": "{{ param.type }}",
                         "description": "{{ param.description }}"{% if param.enum_values %},
-                        "enum": {{ param.enum_values }}{% endif %}{% if param.default is not none %},
-                        "default": {{ param.default }}{% endif %}
+                        "enum": {{ param.enum_values | tojson }}{% endif %}{% if param.default is not none %},
+                        "default": {{ param.default | tojson }}{% endif %}
                     }{% if not loop.last %},{% endif %}
 {% endfor %}
                 },
@@ -44,27 +48,45 @@ async def list_tools() -> list[Tool]:
 
 
 {% for tool in tools %}
-async def {{ tool.name }}({% for param in tool.parameters %}{{ param.name }}: {% if param.type == "string" %}str{% elif param.type == "integer" %}int{% elif param.type == "number" %}float{% elif param.type == "boolean" %}bool{% elif param.type == "array" %}list{% elif param.type == "object" %}dict{% else %}Any{% endif %}{% if not param.required %} = {% if param.default is not none %}{{ param.default }}{% else %}None{% endif %}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}) -> {{ tool.return_type }}:
+async def {{ tool.name }}({% for param in tool.parameters %}{{ param.name }}: {% if param.type == "string" %}str{% elif param.type == "integer" %}int{% elif param.type == "number" %}float{% elif param.type == "boolean" %}bool{% elif param.type == "array" %}list{% elif param.type == "object" %}dict{% else %}Any{% endif %}{% if not param.required %} | None = {% if param.default is not none %}{{ param.default | tojson }}{% else %}None{% endif %}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}) -> dict[str, Any]:
     """
     {{ tool.description }}
+{% if tool.parameters %}
 
-{% for param in tool.parameters %}
     Args:
+{% for param in tool.parameters %}
         {{ param.name }}: {{ param.description }}
 {% endfor %}
+{% endif %}
 
     Returns:
         {{ tool.return_description or "Result of the operation" }}
     """
-    # TODO: Implement {{ tool.name }} logic
-    logger.info(f"Executing {{ tool.name }}")
+    try:
+        logger.info("Executing {{ tool.name }}")
 
-    # Placeholder implementation
-    return {
-        "status": "not_implemented",
-        "message": "This tool handler needs to be implemented",
-        "tool": "{{ tool.name }}"
-    }
+        # TODO: Implement {{ tool.name }} logic
+        # This is a placeholder implementation
+        result = {
+            "status": "success",
+            "message": "This tool handler needs to be implemented",
+            "tool": "{{ tool.name }}",
+{% if tool.parameters %}
+            "params": {
+{% for param in tool.parameters %}
+                "{{ param.name }}": {{ param.name }}{% if not loop.last %},{% endif %}
+{% endfor %}
+            }
+{% else %}
+            "params": {}
+{% endif %}
+        }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in {{ tool.name }}: {% raw %}{e}{% endraw %}", exc_info=True)
+        raise
 
 
 {% endfor %}
@@ -79,30 +101,42 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         {% if loop.first %}if{% else %}elif{% endif %} name == "{{ tool.name }}":
             result = await {{ tool.name }}(
 {% for param in tool.parameters %}
-                {{ param.name }}=arguments.get("{{ param.name }}"{% if not param.required %}, {% if param.default is not none %}{{ param.default }}{% else %}None{% endif %}{% endif %}){% if not loop.last %},{% endif %}
+                {{ param.name }}=arguments.get("{{ param.name }}"{% if not param.required %}, {% if param.default is not none %}{{ param.default | tojson }}{% else %}None{% endif %}{% endif %}){% if not loop.last %},{% endif %}
+
 {% endfor %}
             )
 {% endfor %}
         else:
             raise ValueError(f"Unknown tool: {name}")
 
-        return [TextContent(type="text", text=str(result))]
+        # Return result as JSON string
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     except Exception as e:
-        logger.error(f"Error executing tool {name}: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        logger.error(f"Error executing tool {name}: {e}", exc_info=True)
+        error_response = {
+            "status": "error",
+            "error": str(e),
+            "tool": name
+        }
+        return [TextContent(type="text", text=json.dumps(error_response, indent=2))]
 
 
 async def main():
     """Run the MCP server."""
     logger.info("Starting {{ server_name }} MCP server")
+    logger.info("Available tools: {% for tool in tools %}{{ tool.name }}{% if not loop.last %}, {% endif %}{% endfor %}")
 
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options()
-        )
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await app.run(
+                read_stream,
+                write_stream,
+                app.create_initialization_options()
+            )
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

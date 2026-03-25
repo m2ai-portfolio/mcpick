@@ -1,27 +1,90 @@
 """Tests for {{ server_name }} MCP tools."""
 
 import pytest
+import json
+from mcp.types import TextContent
 from src.server import (
 {% for tool in tools %}
     {{ tool.name }},
 {% endfor %}
+    call_tool,
+    list_tools,
 )
+
+
+@pytest.mark.asyncio
+async def test_list_tools():
+    """Test that list_tools returns all defined tools."""
+    tools = await list_tools()
+
+    assert len(tools) == {{ tools | length }}
+    tool_names = [tool.name for tool in tools]
+{% for tool in tools %}
+    assert "{{ tool.name }}" in tool_names
+{% endfor %}
 
 
 {% for tool in tools %}
 @pytest.mark.asyncio
-async def test_{{ tool.name }}():
-    """Test {{ tool.name }} tool."""
-    # TODO: Implement test with realistic data
+async def test_{{ tool.name }}_handler():
+    """Test {{ tool.name }} tool handler directly."""
+    # Test with valid parameters
     result = await {{ tool.name }}(
 {% for param in tool.parameters %}
-        {{ param.name }}={% if param.type == "string" %}"test_value"{% elif param.type == "integer" %}42{% elif param.type == "number" %}3.14{% elif param.type == "boolean" %}True{% elif param.type == "array" %}[]{% elif param.type == "object" %}{}{% else %}None{% endif %}{% if not loop.last %},{% endif %}
+        {{ param.name }}={% if param.type == "string" %}"test_value"{% elif param.type == "integer" %}42{% elif param.type == "number" %}3.14{% elif param.type == "boolean" %}True{% elif param.type == "array" %}["item1", "item2"]{% elif param.type == "object" %}{"key": "value"}{% else %}None{% endif %}{% if not loop.last %},{% endif %}
 {% endfor %}
     )
 
-    # Basic assertion - replace with actual validation
+    # Verify result structure
     assert result is not None
     assert isinstance(result, dict)
+    assert "status" in result
+
+{% if tool.parameters %}
+    # Verify parameters were received
+    assert "params" in result
+{% for param in tool.parameters %}
+{% if param.required %}
+    assert "{{ param.name }}" in result["params"]
+{% endif %}
+{% endfor %}
+{% endif %}
+
+
+@pytest.mark.asyncio
+async def test_{{ tool.name }}_via_call_tool():
+    """Test {{ tool.name }} tool via call_tool interface."""
+    arguments = {
+{% for param in tool.parameters %}
+        "{{ param.name }}": {% if param.type == "string" %}"test_value"{% elif param.type == "integer" %}42{% elif param.type == "number" %}3.14{% elif param.type == "boolean" %}True{% elif param.type == "array" %}["item1", "item2"]{% elif param.type == "object" %}{"key": "value"}{% else %}None{% endif %}{% if not loop.last %},{% endif %}
+{% endfor %}
+    }
+
+    result = await call_tool("{{ tool.name }}", arguments)
+
+    # Verify response format
+    assert isinstance(result, list)
+    assert len(result) > 0
+    assert isinstance(result[0], TextContent)
+    assert result[0].type == "text"
+
+    # Parse JSON response
+    response_data = json.loads(result[0].text)
+    assert isinstance(response_data, dict)
+    assert "status" in response_data
 
 
 {% endfor %}
+
+@pytest.mark.asyncio
+async def test_call_tool_unknown_tool():
+    """Test that calling an unknown tool raises an error."""
+    result = await call_tool("nonexistent_tool", {})
+
+    # Should return error response
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+    response_data = json.loads(result[0].text)
+    assert response_data["status"] == "error"
+    assert "error" in response_data

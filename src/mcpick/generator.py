@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Optional
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
 from .config import ServerConfig, GenerationOptions
@@ -17,6 +17,66 @@ def get_template_dir() -> Path:
     return Path(__file__).parent / "templates"
 
 
+def sanitize_package_name(name: str) -> str:
+    """
+    Convert server name to a valid Python package name.
+
+    Args:
+        name: Server name to sanitize
+
+    Returns:
+        Valid Python package name
+
+    Raises:
+        ValueError: If name cannot be sanitized to a valid identifier
+    """
+    # Convert to lowercase and replace spaces/hyphens with underscores
+    package_name = name.lower().replace(" ", "_").replace("-", "_")
+
+    # Remove any other invalid characters
+    package_name = "".join(c if c.isalnum() or c == "_" else "" for c in package_name)
+
+    # Ensure it doesn't start with a digit
+    if package_name and package_name[0].isdigit():
+        package_name = f"pkg_{package_name}"
+
+    # Verify it's a valid identifier
+    if not package_name.isidentifier():
+        raise ValueError(
+            f"Cannot create valid Python package name from '{name}'. "
+            f"Result '{package_name}' is not a valid identifier."
+        )
+
+    return package_name
+
+
+def validate_output_path(output_dir: Path) -> Path:
+    """
+    Validate and resolve output directory path.
+
+    Args:
+        output_dir: Output directory path
+
+    Returns:
+        Resolved absolute path
+
+    Raises:
+        ValueError: If path is invalid or suspicious
+    """
+    # Resolve to absolute path
+    resolved = output_dir.resolve()
+
+    # Basic path traversal check - ensure we're not trying to write to system directories
+    sensitive_paths = ["/bin", "/sbin", "/usr", "/etc", "/boot", "/sys", "/proc"]
+    for sensitive in sensitive_paths:
+        if str(resolved).startswith(sensitive):
+            raise ValueError(
+                f"Cannot generate project in sensitive directory: {resolved}"
+            )
+
+    return resolved
+
+
 def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
     """
     Generate a complete MCP server project from configuration.
@@ -27,9 +87,17 @@ def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
 
     Raises:
         FileExistsError: If output directory exists and overwrite=False
+        ValueError: If path validation fails
         Exception: If template rendering or file writing fails
     """
-    output_dir = options.output_dir
+    # Validate and resolve output path
+    try:
+        output_dir = validate_output_path(options.output_dir)
+    except ValueError as e:
+        raise ValueError(f"Invalid output directory: {e}") from e
+
+    # Validate package name
+    package_name = sanitize_package_name(config.server_name)
 
     # Check if output directory exists
     if output_dir.exists() and not options.overwrite:
@@ -49,9 +117,9 @@ def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
     template_dir = options.template_dir or get_template_dir()
     env = Environment(
         loader=FileSystemLoader(template_dir),
-        autoescape=select_autoescape(),
+        autoescape=False,  # We're generating Python/TOML/Markdown, not HTML
         trim_blocks=True,
-        lstrip_blocks=True,
+        lstrip_blocks=False,  # Keep leading whitespace for proper Python indentation
     )
 
     # Prepare template context
@@ -65,7 +133,7 @@ def generate_project(config: ServerConfig, options: GenerationOptions) -> None:
         "tools": config.tools,
         "dependencies": config.dependencies,
         "python_version": config.python_version,
-        "package_name": config.server_name.lower().replace(" ", "_").replace("-", "_"),
+        "package_name": package_name,
     }
 
     # Create directory structure
@@ -111,7 +179,7 @@ def _render_template(env: Environment, template_name: str, output_path: Path, co
         content = template.render(**context)
         output_path.write_text(content)
     except Exception as e:
-        raise Exception(f"Failed to render template {template_name}: {e}")
+        raise Exception(f"Failed to render template {template_name}: {e}") from e
 
 
 def _create_gitignore(output_dir: Path) -> None:
