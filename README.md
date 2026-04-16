@@ -1,89 +1,154 @@
 
 
-# MCPick ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+<p align="center">
+  <img src="assets/infographic.png" alt="MCPick" width="800">
+</p>
 
+<h3 align="center">CLI tool that generates a complete, buildable MCP server project from a single YAML config file. Outputs Python project with tool stubs, pyproject.toml, tests, and init.sh. Supports stdio transport.</h3>
 
-## Overview
-MCPick is a command‑line tool that turns a single YAML configuration into a complete, production‑ready Python Model Context Protocol (MCP) server. It eliminates the repetitive boilerplate, dependency wiring, and test scaffolding so solo AI developers can focus on building tool functionality instead of project setup.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="#examples">Examples</a> &bull;
+  <a href="#contributing">Contributing</a>
+</p>
 
-## Problem Statement
-Starting an MCP server project requires manually configuring the project structure, integrating the MCP SDK, setting up stdio transport, writing tool handler stubs, managing dependencies in `pyproject.toml`, and creating test scaffolding—a 2‑4 hour repetitive process that slows down rapid prototyping.
+## What is this?
+MCPick is a command-line utility that transforms a simple YAML description into a ready-to-build MCP server project. It eliminates boilerplate so solo AI developers can focus on implementing tools instead of setting up projects.
+
+Example usage:
+```
+$ mcpick generate examples/calculator.yaml
+✔ Generated project in ./calculator-server
+```
+
+## Problem
+Setting up a new MCP server requires significant boilerplate: project structure, SDK wiring, transport configuration, and test scaffolding. This repetitive setup slows down developers who want to ship MCP tools quickly.
 
 ## Features
-- **YAML configuration parsing & validation** – reads `server_name`, `description`, `tools[]`, optional `dependencies` and validates schemas with clear error messages.  
-- **MCP server code generation** – produces `server.py` with proper SDK imports, stdio transport, typed tool handlers, and registration code.  
-- **Full project scaffolding** – creates `pyproject.toml`, `tests/`, `README.md`, `init.sh`, `.gitignore` following Python packaging best practices.  
-- **Interactive tool wizard** – `--interactive` prompts for server metadata and tool definitions, generating a YAML file ready for project creation.  
-- **Custom template support** – users can place Jinja2 templates in `MCPICK_TEMPLATE_DIR` to override or extend generated files.  
-- **Built‑in testing** – generated projects include pytest fixtures and test cases that run out‑of‑the‑box.  
-- **Dependency management** – user‑specified `dependencies` are added to `pyproject.toml` alongside the MCP SDK.  
-- **Cross‑platform CLI** – built with Click and Rich for a friendly, colored terminal experience.
+| Feature | Description |
+|---------|-------------|
+| YAML Configuration Parsing and Validation | Reads a YAML file, validates required fields, and provides clear error messages for missing or malformed data. |
+| MCP Server Code Generation | Produces a full Python server with stdio transport, tool handler stubs, and proper async/await patterns. |
+| Project Structure and Dependency Management | Creates pyproject.toml, test suite, README, init.sh, and .gitignore following Python packaging best practices. |
+| Interactive Tool Definition Wizard | Launches a prompt‑driven interface to build a YAML config when no file is supplied. |
+| Template Customization and Extension | Allows users to override Jinja2 templates or add custom ones for specialized project layouts. |
+| Built‑in Testing Support | Generates pytest fixtures and test cases for each tool so the generated project can be validated immediately. |
 
-## Tech Stack
-- **Python 3.11+** – core language  
-- **Click** – CLI framework  
-- **Jinja2** – template engine for file generation  
-- **PyYAML** – YAML parsing  
-- **Pydantic** – configuration validation  
-- **pytest** – testing framework  
-- **mcp** – Model Context Protocol SDK (in generated projects)  
-- **pathlib** – filesystem handling  
-- **rich** – formatted CLI output  
-
-## Quick Start / Installation
-1. **Install MCPick** (from PyPI or source):  
-   ```bash
-   pip install mcpick
+## Quick Start
+1. Clone the repository:
    ```
-2. **Verify installation**:  
-   ```bash
-   mcpick --help
+   git clone https://github.com/m2ai-portfolio/mcpick.git
+   cd mcpick
    ```
-3. **Generate a server from an example**:  
-   ```bash
+2. Install the tool in editable mode:
+   ```
+   pip install -e .
+   ```
+3. Generate a server from the example config:
+   ```
    mcpick generate examples/calculator.yaml
    ```
-4. **Set up the generated project**:  
-   ```bash
-   cd <server_name>
+4. Enter the generated directory and set up the environment:
+   ```
+   cd calculator-server
    chmod +x init.sh
-   ./init.sh   # creates venv, installs deps
+   ./init.sh
    source .venv/bin/activate
    ```
-5. **Run the MCP server**:  
-   ```bash
-   python src/server.py
+5. Run the test suite to verify everything works:
    ```
-6. **Run the test suite**:  
-   ```bash
    pytest
    ```
 
-## Usage
-- **Create a new server**:  
-  ```bash
-  mcpick generate my_tool.yaml
-  ```
-- **Interactive mode**:  
-  ```bash
-  mcpick generate --interactive
-  ```
-- **Validate a YAML config without generating**:  
-  ```bash
-  mcpick validate my_tool.yaml
-  ```
-- **Use a custom template directory**:  
-  ```bash
-  export MCPICK_TEMPLATE_DIR=$HOME/.mcpick/templates
-  mcpick generate my_tool.yaml
-  ```
-- **Show version**:  
-  ```bash
-  mcpick --version
-  ```
+## Examples
+**Basic generation**  
+Create a simple calculator MCP server:
+```
+$ mcpick generate examples/calculator.yaml
+✔ Generated project in ./calculator-server
+$ ls calculator-server
+README.md  init.sh  pyproject.toml  src  tests
+```
 
-## Architecture
-MCPick consists of a Click‑based CLI that parses arguments, loads and validates YAML via Pydantic, selects Jinja2 templates (default or user‑provided), renders files into a target directory, and writes supporting files (`pyproject.toml`, `README.md`, `init.sh`, etc.). The generated MCP server follows the official SDK pattern: stdio transport, automatic tool registration, and async handler functions. All generated code is lint‑ and type‑checked by the included pytest suite.
+**Interactive wizard**  
+Build a config via prompts and immediately generate the project:
+```
+$ mcpick generate --interactive
+? Server name: weather-tools
+? Description: A set of tools for fetching weather data
+? Author name: Jane Doe
+? Author email: jane@example.com
+? Add a tool? (y/n) y
+? Tool name: get_current
+? Tool description: Returns current temperature for a location
+? Parameter name: location
+? Parameter type: string
+? Required? (y/n) y
+? Add another parameter? (y/n) n
+? Add another tool? (y/n) n
+✔ Config written to weather-tools.yaml
+? Generate project now? (y/n) y
+✔ Generated project in ./weather-tools
+```
+
+**Custom template usage**  
+Generate a server using a user‑defined template directory:
+```
+$ mcpick generate examples/database_tools.yaml --template-dir ./examples/custom_templates/database
+✔ Generated project in ./database-server
+$ grep -r "custom_logic" database-server/
+src/database-server/server.py:    # Custom logic from template
+```
+
+## File Structure
+```
+MCPick/
+  src/                    # Core source code
+    mcpick/               # MCPick package
+      __init__.py
+      cli.py              # Click‑based command line interface
+      config.py           # YAML parsing and validation models
+      generator.py        # Jinja2 template rendering and file writing
+      templates/          # Default Jinja2 templates for server, tests, etc.
+  tests/                  # Test suite for MCPick itself
+    test_cli.py
+    test_config.py
+    test_generator.py
+  examples/               # Sample configs and custom templates
+    calculator.yaml
+    database_tools.yaml
+    weather_api.yaml
+    custom_templates/
+      api_wrapper/
+        server.py.j2
+      database/
+        server.py.j2
+      README.md
+  screenshots/            # Demonstration output files (omitted for brevity)
+  pyproject.toml
+  README.md
+  LICENSE
+```
+
+## Tech Stack
+| Technology | Purpose |
+|------------|---------|
+| Python 3.11+ | Core language for the CLI and generated projects |
+| Click | Builds the command‑line interface with rich argument handling |
+| Jinja2 | Templating engine for generating Python files and project structure |
+| PyYAML | Parses YAML configuration files |
+| Pydantic | Validates configuration data and provides data models |
+| pytest | Testing framework for both MCPick and generated projects |
+| mcp | Model Context Protocol SDK used in generated servers |
+| pathlib | Modern, cross‑platform file system operations |
+| rich | Enhanced CLI output with progress indicators and formatting |
+
+## Contributing
+Fork the repo, create a feature branch, make changes, run `pytest`, and submit a pull request. Please keep commits atomic and update tests when adding new functionality.
 
 ## License
-MIT © 2025 MCPick Contributors. See the `LICENSE` file for details.
+MIT
+
+## Author
+Matthew Snow -- [M2AI](https://m2ai.co) | [@m2ai-portfolio](https://github.com/m2ai-portfolio)
