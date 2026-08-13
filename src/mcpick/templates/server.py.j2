@@ -34,15 +34,13 @@ async def list_tools() -> list[Tool]:
 {% for param in tool.parameters %}
                     "{{ param.name }}": {
                         "type": "{{ param.type }}",
-                        "description": "{{ param.description }}"{% if param.enum_values %},
-                        "enum": {{ param.enum_values | tojson }}{% endif %}{% if param.default is not none %},
-                        "default": {{ param.default | tojson }}{% endif %}
-                    }{% if not loop.last %},{% endif %}
+                        "description": "{{ param.description }}"{{ (',\n                        "enum": ' ~ (param.enum_values | tojson)) if param.enum_values else "" }}{{ (',\n                        "default": ' ~ (param.default | tojson)) if param.default is not none else "" }}
+                    }{{ "," if not loop.last else "" }}
 {% endfor %}
                 },
-                "required": [{% for param in tool.parameters %}{% if param.required %}"{{ param.name }}"{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}]
+                "required": [{% for param in tool.parameters %}{% if param.required %}"{{ param.name }}"{{ ", " if not loop.last else "" }}{% endif %}{% endfor %}]
             }
-        ){% if not loop.last %},{% endif %}
+        ){{ "," if not loop.last else "" }}
 {% endfor %}
     ]
 
@@ -74,7 +72,7 @@ async def {{ tool.name }}({% for param in tool.parameters %}{{ param.name }}: {%
 {% if tool.parameters %}
             "params": {
 {% for param in tool.parameters %}
-                "{{ param.name }}": {{ param.name }}{% if not loop.last %},{% endif %}
+                "{{ param.name }}": {{ param.name }}{{ "," if not loop.last else "" }}
 {% endfor %}
             }
 {% else %}

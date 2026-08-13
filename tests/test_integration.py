@@ -1,9 +1,11 @@
 """Integration tests for end-to-end project generation and setup."""
 
+import sys
 import pytest
 import subprocess
 import tempfile
 import shutil
+import venv
 from pathlib import Path
 
 from mcpick.config import parse_yaml, GenerationOptions
@@ -302,3 +304,53 @@ class TestEndToEndGeneration:
             text=True
         )
         assert result.returncode == 0, f"server.py has syntax errors: {result.stderr}"
+
+    def test_generated_project_installs_and_imports_cleanly(self, calculator_yaml, temp_output_dir):
+        """Generate a project, install it into an isolated venv, and import server.py.
+
+        This is the true "is the generated project buildable" check: py_compile only
+        verifies syntax, not that the generated code is compatible with whatever
+        version of its declared dependencies actually gets installed. A generated
+        project can be syntactically valid and still fail at import time (e.g. an
+        MCP SDK decorator API that no longer exists in the resolved dependency
+        version). Reproduces the exact failure mode: generate -> pip install -e -> import.
+        """
+        config = parse_yaml(calculator_yaml)
+        project_dir = temp_output_dir / "generated_project"
+
+        options = GenerationOptions(
+            output_dir=project_dir,
+            overwrite=False,
+            create_venv=False,
+            install_deps=False,
+        )
+        generate_project(config, options)
+
+        venv_dir = temp_output_dir / "venv"
+        venv.EnvBuilder(with_pip=True, clear=True).create(venv_dir)
+        venv_python = venv_dir / "bin" / "python" if sys.platform != "win32" else venv_dir / "Scripts" / "python.exe"
+        assert venv_python.exists(), f"venv python not created at {venv_python}"
+
+        install_result = subprocess.run(
+            [str(venv_python), "-m", "pip", "install", "-q", "-e", str(project_dir)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert install_result.returncode == 0, (
+            f"Installing generated project into isolated venv failed.\n"
+            f"stdout: {install_result.stdout}\nstderr: {install_result.stderr}"
+        )
+
+        import_result = subprocess.run(
+            [str(venv_python), "-c", "import server; assert server.app is not None"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir / "src"),
+            timeout=60,
+        )
+        assert import_result.returncode == 0, (
+            f"Importing generated server.py in the installed venv raised an exception "
+            f"(the exact failure mode that shipped a broken 'buildable' promise).\n"
+            f"stdout: {import_result.stdout}\nstderr: {import_result.stderr}"
+        )
